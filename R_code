@@ -1,0 +1,287 @@
+#load the packages and libraries
+#install.packages("dplyr")
+#install.packages("tidyverse")
+#install.packages("mice")
+#install.packages("glmnet")
+#install.packages("corrplot")
+#install.packages("caret")
+library(ggplot2) 
+library(plyr)
+library(dplyr) 
+library(mice) 
+library(caret)
+library(glmnet) 
+library(readxl)
+library(corrplot)
+
+#read the train and test files, dont read strings as factors
+train <- read.csv("...", stringsAsFactors=FALSE)
+test <- read.csv("...", stringsAsFactors=FALSE)
+
+#combine train and test for data cleaning 
+total <- bind_rows(train,test)
+
+#preview
+str(total)
+summary(total)
+
+#check NAs
+md.pattern(total) #check details since there are NAs
+NAcol <- which(colSums(is.na(total)) > 0)
+sort(colSums(sapply(total[NAcol], is.na)), decreasing = TRUE) #sort columns by number of NAs
+
+#imputate/replace by column
+
+total$PoolQC[is.na(total$PoolQC)] <- "None" #NA in pool prob means there is no pool
+total$PoolQC<- as.factor(total$PoolQC)
+
+total$MiscFeature[is.na(total$MiscFeature)] <- "None" #NA in MiscFeature prob means there is no additional feature
+total$MiscFeature<- as.factor(total$MiscFeature)
+
+total$Alley[is.na(total$Alley)] <- "None" #NA in Alley prob means there is no alley
+total$Alley<- as.factor(total$Alley)
+
+total$Fence[is.na(total$Fence)] <- "None" #NA in Fence prob means there is no fence
+total$Fence <- as.factor(total$Fence)
+
+#skip sale price since it is the target variable 
+
+summary(total$FireplaceQu)
+total$FireplaceQu[is.na(total$FireplaceQu)] <- "None" #NA in FireplaceQu prob means there is no fireplace
+total$FireplaceQu <- as.factor(total$FireplaceQu)
+
+summary(total$LotFrontage)
+total$LotFrontage[is.na(total$LotFrontage)] <- 68 #replace with median 
+
+summary(total$GarageYrBlt) #Max year is 2207 which doesnt make sense, likely a typo, recode to 2007
+table(total$GarageYrBlt) #only one 2207
+#total[total$GarageYrBlt==2207,"GarageYrBlt"]<-2007 
+#there are too many (159) NAs in this category
+#try excluding this variable and compare performance
+
+summary(total$GarageFinish)
+total$GarageFinish[is.na(total$GarageFinish)] <- "None"
+total$GarageFinish <- as.factor(total$GarageFinish)
+
+total$GarageQual[is.na(total$GarageQual)] <- "None"
+total$GarageQual <- as.factor(total$GarageQual)
+
+summary(total$GarageCond)
+total$GarageCond[is.na(total$GarageCond)] <- "None"
+total$GarageCond <- as.factor(total$GarageCond)
+
+total$GarageType[is.na(total$GarageType)] <- "None"
+total$GarageType <- as.factor(total$GarageType)
+
+summary(total$BsmtCond)
+total$BsmtCond[is.na(total$BsmtCond)] <- "None"
+total$BsmtCond <- as.factor(total$BsmtCond)
+
+total$BsmtExposure[is.na(total$BsmtExposure)] <- "None"
+total$BsmtExposure <- as.factor(total$BsmtExposure)
+
+total$BsmtQual[is.na(total$BsmtQual)] <- "None"
+total$BsmtQual <- as.factor(total$BsmtQual)
+
+summary(total$BsmtFinType1)
+total$BsmtFinType2[is.na(total$BsmtFinType2)] <- "None"
+total$BsmtFinType2 <- as.factor(total$BsmtFinType2)
+total$BsmtFinType1[is.na(total$BsmtFinType1)] <- "None"
+total$BsmtFinType1 <- as.factor(total$BsmtFinType1)
+
+total$MasVnrType[is.na(total$MasVnrType)] <- "None"
+total$MasVnrType <- as.factor(total$MasVnrType)
+
+total$MasVnrArea[is.na(total$MasVnrArea)] <- 0 #none
+
+summary(total$MSZoning)
+total$MSZoning[is.na(total$MSZoning)] <- "RL" #mode
+total$MSZoning <- as.factor(total$MSZoning)
+
+total$BsmtFinType2[is.na(total$BsmtFinType2)] <- "None" 
+total$BsmtFinType2 <- as.factor(total$BsmtFinType2)
+summary(total$BsmtFinType2)
+
+summary(total$Utilities)
+total$Utilities[is.na(total$Utilities)] <- "AllPub" #mode #wont incl this
+total$Utilities <- as.factor(total$Utilities)
+
+total$BsmtFullBath[is.na(total$BsmtFullBath)] <- 0 #none
+total$BsmtHalfBath[is.na(total$BsmtHalfBath)] <- 0 #none
+
+summary(total$Functional)
+total$Functional <- as.factor(total$Functional)
+total$Functional[is.na(total$Functional)] <- "Typ" #mode
+
+summary(total$Exterior1st)
+total$Exterior1st <- as.factor(total$Exterior1st)
+total$Exterior1st[is.na(total$Exterior1st)] <- "VinylSd" #only 1 NA
+
+summary(total$Exterior2nd)
+total$Exterior2nd <- as.factor(total$Exterior2nd)
+total$Exterior2nd[is.na(total$Exterior2nd)] <- "VinylSd" #only 1 NA
+
+total$BsmtFinSF1[is.na(total$BsmtFinSF1)] <- 0 #none
+total$BsmtFinSF2[is.na(total$BsmtFinSF2)] <- 0 #none
+total$BsmtUnfSF[is.na(total$BsmtUnfSF)] <- 0 #none
+total$TotalBsmtSF[is.na(total$TotalBsmtSF)] <- 0 #none
+
+summary(total$Electrical)
+total$Electrical[is.na(total$Electrical)] <- "SBrkr" #mode, only 1 NA
+total$Electrical <- as.factor(total$Electrical)
+
+total$KitchenQual[is.na(total$KitchenQual)] <- "TA" #mode
+total$KitchenQual <- as.factor(total$KitchenQual)
+summary(total$KitchenQual)
+
+total$GarageCars[is.na(total$GarageCars)] <- 2 #mode
+
+total$GarageArea[is.na(total$GarageArea)] <- 480 #median
+
+total$SaleType[is.na(total$SaleType)] <- "WD" #mode
+total$SaleType <- as.factor(total$SaleType)
+summary(total$SaleType)
+
+#keep checking for NA
+NAcol <- which(colSums(is.na(total)) > 0)
+sort(colSums(sapply(total[NAcol], is.na)), decreasing = TRUE) #no more NAs other than sale price
+
+#check classes
+total$MSSubClass <- as.factor(total$MSSubClass)
+total$Condition2 <- as.factor(total$Condition2)
+total$HouseStyle <- as.factor(total$HouseStyle)
+total$Utilities <- as.factor(total$Utilities)
+total$RoofMatl <- as.factor(total$RoofMatl)
+total$Exterior1st <- as.factor(total$Exterior1st)
+total$Exterior2nd <- as.factor(total$Exterior2nd)
+total$Heating <- as.factor(total$Heating)
+total$Electrical <- as.factor(total$Electrical)
+total$MoSold <- as.factor(total$MoSold)
+total$YrSold <- as.factor(total$YrSold)
+total$YearBuilt <- as.factor(total$YearBuilt)
+total$MoSold <- as.factor(total$MoSold)
+
+#feature engineering
+total$Age <- total$YrSold-total$YearBuilt 
+total$TotalSqft<- total$GrLivArea+total$TotalBsmtSF
+summary(total$TotalSqft)
+summary(total$GrLivArea)
+#total$TotBathrooms <- total$FullBath + (total$HalfBath/2) + total$BsmtFullBath + (total$BsmtHalfBath/2) #number of bath
+#total$Remod <- ifelse(total$YearBuilt == total$YearRemodAdd, 0, 1) #0=No Remodeling, 1=Remodeling
+
+#explore relationship (correlation)
+numericals <- which(sapply(total, is.numeric)) #find numeric variables'column index 
+num_df <- total[, numericals] 
+names(num_df)
+num_df<- num_df[!names(num_df) %in% c('Id')]  #exclude Id
+#visualization
+cor_numVar <- cor(num_df, use="complete.obs") 
+corr_matrix <- as.matrix(sort(cor_numVar[,'SalePrice'], decreasing = TRUE))
+high_corr <- names(which(apply(corr_matrix, 1, function(x) abs(x)>0.5)))
+cor_numVar <- cor_numVar[high_corr, high_corr]
+#par(mfrow=c(1,1))
+corrplot(cor_numVar, type="upper",method="circle")
+#looks like OverallQual, TotalSqFeet, GrLivArea are most correlated with sale price
+
+#outliers
+dim(num_df)
+all_num<-num_df[!is.na(num_df$SalePrice),]
+dim(all_num)
+reg_corr<-lm(SalePrice~.,all_num)
+par(mfrow=c(1,1))
+plot(reg_corr) #identify outliers from the plots
+
+#drop outliers
+outliers <- c(524,1299,1183)
+total2 <- total[-outliers,]
+dim(total2)
+
+#check distributions
+hist(total2$SalePrice) 
+
+hist(total2$OverallQual)
+hist(total2$TotalSqft)
+hist(total2$GrLivArea)
+#hist(total2$GarageCars) count, ignore
+hist(total2$GarageArea)
+hist(total2$TotalBsmtSF)
+hist(total2$X1stFlrSF)
+#hist(total2$FullBath) count, ignore
+#hist(total2$TotRmsAbvGrd) count, ignore
+#hist(total2$YearRemodAdd) sb converted to factor 
+hist(total2$Age)
+
+par(mfrow=c(3,3))
+hist(log(total2$OverallQual))
+hist(log(total2$TotalSqft))
+hist(log(total2$GrLivArea))
+hist(log(total2$GarageArea))
+hist(log(total2$TotalBsmtSF))
+hist(log(total2$X1stFlrSF))
+hist(log(total2$Age))
+
+#split data
+sub_train<-total2[!is.na(total2$SalePrice),]
+dim(sub_train)
+nrow(total2)
+names(total2)
+
+y<-log(sub_train$SalePrice)
+X<-model.matrix(Id~log(TotalSqft) +TotalSqft + LotFrontage + MiscVal +LotArea + Street + Alley + LotShape+ 
+                                     LotConfig + LandSlope  + Condition1 +GarageType +  GarageQual + GarageCond +
+                                     Condition2 + BldgType + HouseStyle + Age  + RoofStyle  + Exterior1st + Exterior2nd ++ ExterQual
+                                      MasVnrType  + MasVnrArea + Foundation + BsmtQual + BsmtCond + LandContour +
+                                      BsmtExposure + BsmtFinType1  + BsmtFinSF1 +  BsmtFinType2 + BsmtFinSF2 + TotalBsmtSF +
+                                      GarageFinish + GarageCars + GarageArea+OverallQual + OverallCond +
+                                      X3SsnPorch + PoolArea + MiscFeature  + MoSold + YrSold + RoofMatl +
+                                      + PavedDrive + WoodDeckSF + YearRemodAdd + KitchenQual +TotRmsAbvGrd  + 
+                                      Heating+ HeatingQC + CentralAir + Electrical + X1stFlrSF + X2ndFlrSF + LowQualFinSF + 
+                                      + BsmtFullBath  + BsmtHalfBath+FullBath + HalfBath+BedroomAbvGr +Neighborhood+
+                                      KitchenAbvGr  +Fireplaces + FireplaceQu +  EnclosedPorch + ScreenPorch + 
+                                      OpenPorchSF + PoolQC + Fence + ExterCond + SaleCondition+
+                                      GrLivArea,total2)[,-1]
+X<-cbind(total2$Id,X)
+
+nrow(X)
+X_training<-X[1:1457,]
+X_prediction<-X[1458:2916,]
+#holdout 
+sub_train2<-sub_train[1:1200,]
+sub_test2<-sub_train[1201:1457,]
+X_sub_train <-X[1:1200,]
+x_sub_test<-X[1201:1457,]
+
+y2<-log(sub_train2$SalePrice)
+
+#train on subtrain, validate on sub test
+lasso.fit.sub<-glmnet(x = X_sub_train, y = y2, alpha = 1)
+plot(lasso.fit.sub, xvar = "lambda")
+
+sub_crossval <-  cv.glmnet(x = X_sub_train, y = y2, alpha = 1) #create cross-validation data
+plot(sub_crossval)
+penalty.lasso.sub <- sub_crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso.sub) #see where it was on the graph
+lasso.opt.fit_sub <-glmnet(x = X_sub_train, y = y2, alpha = 1, lambda = penalty.lasso.sub) #estimate the model with the optimal penalty
+coef(lasso.opt.fit_sub) #resultant model coefficients
+
+lasso.sub.testing <- exp(predict(lasso.opt.fit_sub, s = penalty.lasso.sub, newx =x_sub_test))
+mean(abs(lasso.sub.testing-sub_test2$SalePrice)/sub_test2$SalePrice*100) 
+
+
+#LASSO 
+lasso.fit<-glmnet(x = X_training, y = y, alpha = 1)
+plot(lasso.fit, xvar = "lambda")
+
+crossval <-  cv.glmnet(x = X_training, y = y, alpha = 1) #create cross-validation data
+plot(crossval)
+penalty.lasso <- crossval$lambda.min #determine optimal penalty parameter, lambda
+log(penalty.lasso) #see where it was on the graph
+lasso.opt.fit <-glmnet(x = X_training, y = y, alpha = 1, lambda = penalty.lasso) #estimate the model with the optimal penalty
+coef(lasso.opt.fit) #resultant model coefficients
+
+# lasso.testing <- exp(predict(lasso.opt.fit, s = penalty.lasso, newx =X_testing))
+# mean(abs(lasso.testing-sub_test$SalePrice)/sub_test$SalePrice*100)
+
+predicted.prices.lasso <- exp((predict(lasso.opt.fit, s = penalty.lasso, newx =X_prediction)))
+write.csv(predicted.prices.lasso, file = "Predicted Sale Prices-v46.csv") 
+
